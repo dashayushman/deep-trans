@@ -59,7 +59,7 @@ class Seq2SeqModel(object):
         We assume that the list is sorted, e.g., [(2, 4), (8, 16)].
       size: number of units in each layer of the model.
       num_layers: number of layers in the model.
-      max_gradient_norm: gradients will be clipped to maximally this norm.
+      max_gradient_norm: gradients will be clipped to maximimize this norm.
       batch_size: the size of the batches used during training;
         the model construction is independent of batch_size, so it can be
         changed after initialization if this is convenient, e.g., for decoding.

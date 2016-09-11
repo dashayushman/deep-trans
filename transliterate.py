@@ -13,14 +13,14 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Binary for training translation models and decoding from them.
+"""Binary for training transliteration models and decoding from them.
 
-Running this program without --decode will download the WMT corpus into
+Running this program without --decode will download the REV_brands corpus into
 the directory specified as --data_dir and tokenize it in a very basic way,
 and then start training a model saving checkpoints to --train_dir.
 
 Running with --decode starts an interactive loop so you can see how
-the current checkpoint translates English sentences into French.
+the current checkpoint transliterate English sentences into Hindi.
 
 See the following papers for more information on neural translation models.
  * http://arxiv.org/abs/1409.3215
@@ -117,15 +117,13 @@ def read_data(source_path, target_path, max_size=None):
 
 
 def create_model(session, forward_only):
-  """Create translation model and initialize or load parameters in session."""
+  """Create transliteration model and initialize or load parameters in session."""
   model = seq2seq_model.Seq2SeqModel(
       FLAGS.en_vocab_size, FLAGS.hn_vocab_size, _buckets,
       FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
       FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
-      forward_only=forward_only)
+      forward_only=forward_only,use_lstm=True)
   ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
-  #print(ckpt.model_checkpoint_path)
-  #model.saver.restore(session, FLAGS.train_dir)
   if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
     model.saver.restore(session, ckpt.model_checkpoint_path)
@@ -139,7 +137,7 @@ def train():
   """Train a en->hn transliteration model using REV_brandnames data."""
   # Prepare REV_brandnames data.
   print("Preparing REV_Brandnames data in %s" % FLAGS.data_dir)
-  en_train, fr_train, en_dev, fr_dev, _, _ = data_utils.prepare_wmt_data(
+  en_train, fr_train, en_dev, fr_dev, _, _ = data_utils.prepare_rev_data(
       FLAGS.data_dir, FLAGS.en_vocab_size, FLAGS.hn_vocab_size)
 
   with tf.Session() as sess:
@@ -388,7 +386,6 @@ def evaluate():
     #  text_file.write(fc_str.encode('utf8'))
 
 def main(_):
-  print(FLAGS.evaluate)
   if FLAGS.self_test:
     self_test()
   elif FLAGS.decode:
