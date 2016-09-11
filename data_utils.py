@@ -44,8 +44,8 @@ _CHAR_SPLIT = re.compile(b"([.,!?\"':;)(])")
 _DIGIT_RE = re.compile(br"\d")
 
 # URLs for REV data.
-_REV_ENHN_TRAIN_URL = "https://drive.google.com/file/d/0B39jMq4OCmFDUXJReXNSTC1yYmM?alt=media"
-_REV_ENHN_DEV_URL = "https://drive.google.com/file/d/0B39jMq4OCmFDOVFMcmVSVlpQazA?alt=media"
+_REV_ENHN_TRAIN_URL = "https://docs.google.com/uc?authuser=0&id=0B39jMq4OCmFDUXJReXNSTC1yYmM&export=download"
+_REV_ENHN_DEV_URL = "https://docs.google.com/uc?authuser=0&id=0B39jMq4OCmFDOVFMcmVSVlpQazA&export=download"
 
 
 def maybe_download(directory, filename, url):

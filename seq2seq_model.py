@@ -97,10 +97,11 @@ class Seq2SeqModel(object):
     # Create the internal multi-layer cell for our RNN.
     single_cell = tf.nn.rnn_cell.GRUCell(size)
     if use_lstm:
-      single_cell = tf.nn.rnn_cell.BasicLSTMCell(size)
+      single_cell = tf.nn.rnn_cell.BasicLSTMCell(size,state_is_tuple=True)
     cell = single_cell
     if num_layers > 1:
       cell = tf.nn.rnn_cell.MultiRNNCell([single_cell] * num_layers)
+      cell = tf.nn.rnn_cell.DropoutWrapper(cell,output_keep_prob=0.5)
 
     # The seq2seq function: we use embedding for the input and attention.
     def seq2seq_f(encoder_inputs, decoder_inputs, do_decode):

@@ -20,7 +20,7 @@ the directory specified as --data_dir and tokenize it in a very basic way,
 and then start training a model saving checkpoints to --train_dir.
 
 Running with --decode starts an interactive loop so you can see how
-the current checkpoint transliterate English sentences into Hindi.
+the current checkpoint transliterates English words into Hindi.
 
 See the following papers for more information on neural translation models.
  * http://arxiv.org/abs/1409.3215
@@ -102,7 +102,7 @@ def read_data(source_path, target_path, max_size=None):
       counter = 0
       while source and target and (not max_size or counter < max_size):
         counter += 1
-        if counter % 100000 == 0:
+        if counter % 10000 == 0:
           print("  reading data line %d" % counter)
           sys.stdout.flush()
         source_ids = [int(x) for x in source.split()]
@@ -122,7 +122,7 @@ def create_model(session, forward_only):
       FLAGS.en_vocab_size, FLAGS.hn_vocab_size, _buckets,
       FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
       FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
-      forward_only=forward_only,use_lstm=True)
+      forward_only=forward_only,use_lstm=False)
   ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
   if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
     print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
@@ -137,7 +137,7 @@ def train():
   """Train a en->hn transliteration model using REV_brandnames data."""
   # Prepare REV_brandnames data.
   print("Preparing REV_Brandnames data in %s" % FLAGS.data_dir)
-  en_train, fr_train, en_dev, fr_dev, _, _ = data_utils.prepare_rev_data(
+  en_train, hn_train, en_dev, hn_dev, _, _ = data_utils.prepare_rev_data(
       FLAGS.data_dir, FLAGS.en_vocab_size, FLAGS.hn_vocab_size)
 
   with tf.Session() as sess:
@@ -148,8 +148,8 @@ def train():
     # Read data into buckets and compute their sizes.
     print ("Reading development and training data (limit: %d)."
            % FLAGS.max_train_data_size)
-    dev_set = read_data(en_dev, fr_dev)
-    train_set = read_data(en_train, fr_train, FLAGS.max_train_data_size)
+    dev_set = read_data(en_dev, hn_dev)
+    train_set = read_data(en_train, hn_train, FLAGS.max_train_data_size)
     train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
     train_total_size = float(sum(train_bucket_sizes))
 
@@ -192,7 +192,7 @@ def train():
           sess.run(model.learning_rate_decay_op)
         previous_losses.append(loss)
         # Save checkpoint and zero timer and loss.
-        checkpoint_path = os.path.join(FLAGS.train_dir, "translate.ckpt")
+        checkpoint_path = os.path.join(FLAGS.train_dir, "transliterate.ckpt")
         model.saver.save(sess, checkpoint_path, global_step=model.global_step)
         step_time, loss = 0.0, 0.0
         # Run evals on development set and print their perplexity.
@@ -213,30 +213,30 @@ def decode():
   with tf.Session() as sess:
     # Create model and load parameters.
     model = create_model(sess, True)
-    model.batch_size = 1  # We decode one sentence at a time.
+    model.batch_size = 1  # We decode one word at a time.
 
     # Load vocabularies.
     en_vocab_path = os.path.join(FLAGS.data_dir,
                                  "vocab%d.en" % FLAGS.en_vocab_size)
-    fr_vocab_path = os.path.join(FLAGS.data_dir,
-                                 "vocab%d.fr" % FLAGS.hn_vocab_size)
+    hn_vocab_path = os.path.join(FLAGS.data_dir,
+                                 "vocab%d.hn" % FLAGS.hn_vocab_size)
     en_vocab, _ = data_utils.initialize_vocabulary(en_vocab_path)
-    _, rev_fr_vocab = data_utils.initialize_vocabulary(fr_vocab_path)
+    _, rev_hn_vocab = data_utils.initialize_vocabulary(hn_vocab_path)
 
     # Decode from standard input.
     sys.stdout.write("> ")
     sys.stdout.flush()
-    sentence = sys.stdin.readline()
-    while sentence:
-      # Get token-ids for the input sentence.
-      token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), en_vocab)
+    word = sys.stdin.readline()
+    while word:
+      # Get token-ids for the input word.
+      token_ids = data_utils.word_to_token_ids(tf.compat.as_bytes(word), en_vocab)
       # Which bucket does it belong to?
       bucket_id = min([b for b in xrange(len(_buckets))
                        if _buckets[b][0] > len(token_ids)])
-      # Get a 1-element batch to feed the sentence to the model.
+      # Get a 1-element batch to feed the word to the model.
       encoder_inputs, decoder_inputs, target_weights = model.get_batch(
           {bucket_id: [(token_ids, [])]}, bucket_id)
-      # Get output logits for the sentence.
+      # Get output logits for the word.
       _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
                                        target_weights, bucket_id, True)
       # This is a greedy decoder - outputs are just argmaxes of output_logits.
@@ -244,11 +244,11 @@ def decode():
       # If there is an EOS symbol in outputs, cut them at that point.
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-      # Print out French sentence corresponding to outputs.
-      print(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
+      # Print out Hindi word corresponding to outputs.
+      print("".join([tf.compat.as_str(rev_hn_vocab[output]) for output in outputs]))
       print("> ", end="")
       sys.stdout.flush()
-      sentence = sys.stdin.readline()
+      word = sys.stdin.readline()
 
 
 def self_test():
@@ -270,82 +270,43 @@ def self_test():
       model.step(sess, encoder_inputs, decoder_inputs, target_weights,
                  bucket_id, False)
 
-def compare_unicode_str(str1,str2):
-
-  if str1.decode('utf-8') == str2.decode('utf-8'):
-    #print('true')
-    return True
-  else:
-    #print('false')
-    return False
-  '''
-  print(str1)
-  print(str2)
-  if(len(str1) != len(str2)):
-    return False
-  chars1 = str1.split()
-  chars2 = str2.split()
-
-  scr = 0
-  for i,ch in enumerate(chars1):
-    if ch == chars2[i]:
-      scr = scr+1
-  print(scr)
-  if scr == len(str1):
-    return True
-  else:
-    return False
-  '''
-
 def evaluate():
-  """Test the translation model."""
+  """Generate an evaluation output of the  model.
+     Takes the directory path for evaluation from FLAGS and writes an output file to the same directory"""
   with tf.Session() as sess:
     # Create model and load parameters.
     model = create_model(sess, True)
-    model.batch_size = 1  # We decode one sentence at a time.
+    model.batch_size = 1  # We decode one word at a time.
 
     # Load vocabularies.
     en_vocab_path = os.path.join(FLAGS.data_dir,
                                  "vocab%d.en" % FLAGS.en_vocab_size)
-    fr_vocab_path = os.path.join(FLAGS.data_dir,
+    hn_vocab_path = os.path.join(FLAGS.data_dir,
                                  "vocab%d.fr" % FLAGS.hn_vocab_size)
     en_vocab, _ = data_utils.initialize_vocabulary(en_vocab_path)
-    _, rev_fr_vocab = data_utils.initialize_vocabulary(fr_vocab_path)
+    _, rev_hn_vocab = data_utils.initialize_vocabulary(hn_vocab_path)
 
-    # Decode from standard input.
-    en_eval_path = os.path.join(FLAGS.evaluation_dir,'test.en')
-    #hn_eval_path = os.path.join(FLAGS.evaluation_dir,'test.hn')
+    #path for loading the evaluation file
+    en_eval_path = os.path.join(FLAGS.evaluation_dir,'test.rel.2.en')
+
+    #Path to save the output file
     result_path = os.path.join(FLAGS.evaluation_dir,'result.txt')
+
     en_eval_list = []
-    #hn_eval_list = []
-    hit_list = []
     file_content_output = []
-    print('reading english test file')
+    print('reading english evaluation file')
+
     with open(en_eval_path) as fp:
       for line in fp:
 	char_list = list(line)
 	space_separated = ' '.join(char_list)
-	#final_list = list(space_separated)
-        en_eval_list.append(space_separated)
-    #print('reading hindi test file')
-    #with open(hn_eval_path) as fp:
-    #  for line in fp:
-    #    hn_eval_list.append(line)
+    en_eval_list.append(space_separated)
 
-    #if len(en_eval_list) != len(hn_eval_list):
-    #  print('invalid test files. the number of instances in both languages do not match.')
-    #  return
     print('decoding english words for evaluation')
-    for i,sentence in enumerate(en_eval_list):
-      #print(sentence)
-      if i == 500:
-	break
-      if len(sentence) == 0:
-        continue
-      if i%100 == 0:
-        print(str(i)+' out of ' + str(len(en_eval_list)) +' words decoded')
-      # Get token-ids for the input sentence.
-      token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), en_vocab)
+    for i,word in enumerate(en_eval_list):
+
+      # Get token-ids for the input word.
+      token_ids = data_utils.word_to_token_ids(tf.compat.as_bytes(word), en_vocab)
       # Which bucket does it belong to?
       bucket_list = [b for b in xrange(len(_buckets))
                        if _buckets[b][0] > len(token_ids)]
@@ -355,10 +316,10 @@ def evaluate():
         print('could not find bucket')
         continue
       bucket_id = min(bucket_list)
-      # Get a 1-element batch to feed the sentence to the model.
+      # Get a 1-element batch to feed the word to the model.
       encoder_inputs, decoder_inputs, target_weights = model.get_batch(
           {bucket_id: [(token_ids, [])]}, bucket_id)
-      # Get output logits for the sentence.
+      # Get output logits for the word.
       _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
                                        target_weights, bucket_id, True)
       # This is a greedy decoder - outputs are just argmaxes of output_logits.
@@ -366,24 +327,18 @@ def evaluate():
       # If there is an EOS symbol in outputs, cut them at that point.
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-      # Print out French sentence corresponding to outputs.
-      hn_output = "".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs])
-      #hn_gt = hn_eval_list[i].replace(' ','')
-      sentence = sentence.replace(' ','')
-      #if compare_unicode_str(hn_output,hn_gt):
-      #  hit_list.append(1)
-      #else:
-      #  hit_list.append(0)
-      file_content_output.append([sentence,hn_output])
-      #print(sentence,hn_output,hn_gt)
-    #hit_list = np.array(hit_list)
-    #accuracy = (1.0*np.sum(hit_list))/np.size(hit_list)
-    print('done!!!')
+
+      # Print out Hindi word corresponding to outputs.
+      hn_output = "".join([tf.compat.as_str(rev_hn_vocab[output]) for output in outputs])
+      if i%100 == 0:
+        print(str(i)+' out of ' + str(len(en_eval_list)) +' words decoded\n English Input: ' + word + '\t Hindi Output: ' + hn_output)
+
+      file_content_output.append([word,hn_output])
+
+    print('done generating the output file!!!')
     fc_str = '\n'.join(['\t'.join(row) for row in file_content_output])
     f = codecs.open(result_path, encoding='utf-8', mode='wb')
     f.write(fc_str.decode('utf-8'))
-    #with open("eng.csv", "wb") as text_file:
-    #  text_file.write(fc_str.encode('utf8'))
 
 def main(_):
   if FLAGS.self_test:
