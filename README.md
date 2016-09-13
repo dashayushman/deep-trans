@@ -1,5 +1,3 @@
-# trans-ai
-A Recurrent Neural Network that transliterates strings in English to other languages
 ![alt tag](https://sigvoiced.files.wordpress.com/2016/09/deeptrans.png)
 -----------------
 # DeepTrans
