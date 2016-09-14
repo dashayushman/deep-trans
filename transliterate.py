@@ -39,12 +39,12 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0,
                           "Clip gradients to this norm.")
 tf.app.flags.DEFINE_integer("batch_size", 10,
                             "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("size", 1024, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 256, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_integer("en_vocab_size", 40000, "English vocabulary size.")
 tf.app.flags.DEFINE_integer("hn_vocab_size", 40000, "Hindi vocabulary size.")
 tf.app.flags.DEFINE_string("data_dir", "/tmp", "Data directory")
-tf.app.flags.DEFINE_string("evaluation_dir", "/tmp", "Data directory")
+tf.app.flags.DEFINE_string("transliterate_file_dir", "/tmp", "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "/tmp", "Training directory.")
 tf.app.flags.DEFINE_integer("max_train_data_size", 0,
                             "Limit on the size of training data (0: no limit).")
@@ -52,7 +52,7 @@ tf.app.flags.DEFINE_integer("steps_per_checkpoint", 200,
                             "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_boolean("decode", False,
                             "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_boolean("evaluate", False,
+tf.app.flags.DEFINE_boolean("transliterate_file", False,
                             "Set to True for evaluating.")
 tf.app.flags.DEFINE_boolean("self_test", False,
                             "Run a self-test if this is set to True.")
@@ -61,7 +61,8 @@ FLAGS = tf.app.flags.FLAGS
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = [(3, 5), (5, 10), (10, 15), (15, 25),(25,30),(30,40)]
+_buckets = [(3, 5), (5, 10), (10, 15), (15, 25),(25,35),(35,45)]
+
 
 
 def read_data(source_path, target_path, max_size=None):
@@ -122,7 +123,7 @@ def create_model(session, forward_only):
 def train():
   """Train a en->hn transliteration model using REV_brandnames data."""
   # Prepare REV_brandnames data.
-  print("Preparing REV_Brandnames data in %s" % FLAGS.data_dir)
+  print("Preparing REV data in %s" % FLAGS.data_dir)
   en_train, hn_train, en_dev, hn_dev, _, _ = data_utils.prepare_rev_data(
       FLAGS.data_dir, FLAGS.en_vocab_size, FLAGS.hn_vocab_size)
 
@@ -214,6 +215,9 @@ def decode():
     sys.stdout.flush()
     word = sys.stdin.readline()
     while word:
+      word = word.lower()
+      char_list_new = list(word)
+      word = " ".join(char_list_new)
       # Get token-ids for the input word.
       token_ids = data_utils.word_to_token_ids(tf.compat.as_bytes(word), en_vocab)
       # Which bucket does it belong to?
@@ -240,7 +244,7 @@ def decode():
 def self_test():
   """Test the translation model."""
   with tf.Session() as sess:
-    print("Self-test for neural translation model.")
+    print("Self-test for neural transliteration model.")
     # Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
     model = seq2seq_model.Seq2SeqModel(10, 10, [(3, 3), (6, 6)], 32, 2,
                                        5.0, 32, 0.3, 0.99, num_samples=8)
@@ -268,19 +272,20 @@ def evaluate():
     en_vocab_path = os.path.join(FLAGS.data_dir,
                                  "vocab%d.en" % FLAGS.en_vocab_size)
     hn_vocab_path = os.path.join(FLAGS.data_dir,
-                                 "vocab%d.fr" % FLAGS.hn_vocab_size)
+                                 "vocab%d.hn" % FLAGS.hn_vocab_size)
     en_vocab, _ = data_utils.initialize_vocabulary(en_vocab_path)
     _, rev_hn_vocab = data_utils.initialize_vocabulary(hn_vocab_path)
 
     #path for loading the evaluation file
-    en_eval_path = os.path.join(FLAGS.evaluation_dir,'test.rel.2.en')
-
+    en_eval_path = os.path.join(FLAGS.transliterate_file_dir,'test.en')
+    print('Transliterating '+en_eval_path)
     #Path to save the output file
-    result_path = os.path.join(FLAGS.evaluation_dir,'result.txt')
+    result_path = os.path.join(FLAGS.transliterate_file_dir,'result.txt')
+    print('Results will be stored in '+result_path)
 
     en_eval_list = []
     file_content_output = []
-    print('reading english evaluation file')
+    print('reading input file')
 
     with open(en_eval_path) as fp:
       for line in fp:
@@ -288,9 +293,11 @@ def evaluate():
 	space_separated = ' '.join(char_list)
     en_eval_list.append(space_separated)
 
-    print('decoding english words for evaluation')
+    print('decoding input file')
     for i,word in enumerate(en_eval_list):
-
+      word = word.lower()
+      char_list_new = list(word)
+      word = " ".join(char_list_new)
       # Get token-ids for the input word.
       token_ids = data_utils.word_to_token_ids(tf.compat.as_bytes(word), en_vocab)
       # Which bucket does it belong to?
@@ -331,7 +338,7 @@ def main(_):
     self_test()
   elif FLAGS.decode:
     decode()
-  elif FLAGS.evaluate:
+  elif FLAGS.transliterate_file:
     evaluate()
   else:
     train()
