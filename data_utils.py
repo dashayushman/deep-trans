@@ -29,10 +29,6 @@ UNK_ID = 3
 _CHAR_SPLIT = re.compile(b"([.,!?\"':;)(])")
 _DIGIT_RE = re.compile(br"\d")
 
-# URLs for REV data.
-_REV_ENHN_TRAIN_URL = "https://docs.google.com/uc?authuser=0&id=0B39jMq4OCmFDUXJReXNSTC1yYmM&export=download"
-_REV_ENHN_DEV_URL = "https://docs.google.com/uc?authuser=0&id=0B39jMq4OCmFDOVFMcmVSVlpQazA&export=download"
-
 
 def maybe_download(directory, filename, url):
   """Download filename from url unless it's already in directory."""
@@ -58,34 +54,27 @@ def gunzip_file(gz_path, new_path):
 
 
 def get_rev_enhn_train_set(directory):
-  """Download the REV en-hn training corpus to directory unless it's there."""
+  """Check whether training files exist"""
   print(directory)
   train_path = os.path.join(directory, "train.rel.2")
   if not (gfile.Exists(train_path +".hn") and gfile.Exists(train_path +".en")):
-    corpus_file = maybe_download(directory, "training_en_hn_rel_2.tar",
-                                 _REV_ENHN_TRAIN_URL)
-    print("Extracting tar file %s" % corpus_file)
-    with tarfile.open(corpus_file, "r") as corpus_tar:
-      corpus_tar.extractall(directory)
+    raise ValueError("Training files %s not found.", train_path)
   return train_path
 
 
 def get_rev_enhn_dev_set(directory):
-  """Download the REV en-hn training corpus to directory unless it's there."""
+  """heck whether Development files exist."""
   dev_name = "test.rel.2"
   dev_path = os.path.join(directory, dev_name)
   if not (gfile.Exists(dev_path + ".hn") and gfile.Exists(dev_path + ".en")):
-    dev_file = maybe_download(directory, "dev_en_hn_rel_2.tar", _REV_ENHN_DEV_URL)
-    print("Extracting tgz file %s" % dev_file)
-    with tarfile.open(dev_file, "r") as corpus_tar:
-      corpus_tar.extractall(directory)
+    raise ValueError("Devlopment files %s not found.", dev_path)
   return dev_path
 
 
 def basic_tokenizer(sentence):
   """Very basic tokenizer: split the word into a list of tokens."""
   words = []
-  for space_separated_fragment in list(sentence.strip()):
+  for space_separated_fragment in sentence.strip().split():
     words.extend(re.split(_CHAR_SPLIT, space_separated_fragment))
   return [w for w in words if w]
 
@@ -117,7 +106,7 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
         counter += 1
         if counter % 10000 == 0:
           print("  processing line %d" % counter)
-        tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
+        tokens = tokenizer(line) if tokenizer else basic_tokenizer(line.lower())
         for w in tokens:
           word = re.sub(_DIGIT_RE, b"0", w) if normalize_digits else w
           if word in vocab:
