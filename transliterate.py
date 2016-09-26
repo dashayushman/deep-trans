@@ -56,6 +56,12 @@ tf.app.flags.DEFINE_boolean("transliterate_file", False,
                             "Set to True for evaluating.")
 tf.app.flags.DEFINE_boolean("self_test", False,
                             "Run a self-test if this is set to True.")
+tf.app.flags.DEFINE_integer("n_suggest", 10,
+                            "number of suggestions to get from the system per english word.")
+tf.app.flags.DEFINE_boolean("suggest", False,
+                            "Flag to produce suggestions.")
+tf.app.flags.DEFINE_integer("tr_file_lines", 0,
+                            "Limit transliteration file lines.")
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -231,11 +237,13 @@ def decode():
                                        target_weights, bucket_id, True)
       # This is a greedy decoder - outputs are just argmaxes of output_logits.
       outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+      prob_outputs = [float(np.max(logit, axis=1)) for logit in output_logits]
+      tot_prob = sum(prob_outputs)/len(prob_outputs)
       # If there is an EOS symbol in outputs, cut them at that point.
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
       # Print out Hindi word corresponding to outputs.
-      print("".join([tf.compat.as_str(rev_hn_vocab[output]) for output in outputs]))
+      print("".join([tf.compat.as_str(rev_hn_vocab[output]) for output in outputs]) + "\tprob = " + str(tot_prob))
       print("> ", end="")
       sys.stdout.flush()
       word = sys.stdin.readline()
@@ -263,6 +271,8 @@ def self_test():
 def evaluate():
   """Generate an evaluation output of the  model.
      Takes the directory path for evaluation from FLAGS and writes an output file to the same directory"""
+  n_suggest = FLAGS.n_suggest
+  suggest = FLAGS.suggest
   with tf.Session() as sess:
     # Create model and load parameters.
     model = create_model(sess, True)
@@ -289,12 +299,22 @@ def evaluate():
 
     with open(en_eval_path) as fp:
       for line in fp:
-	char_list = list(line)
-	space_separated = ' '.join(char_list)
-    en_eval_list.append(space_separated)
+        char_list = list(line)
+        space_separated = ' '.join(char_list)
+        en_eval_list.append(space_separated)
 
     print('decoding input file')
+    tr_file_lines = FLAGS.tr_file_lines
+    print(tr_file_lines)
+    if tr_file_lines <= 0:
+      tr_file_lines = len(en_eval_list)
+
     for i,word in enumerate(en_eval_list):
+      if i == tr_file_lines:
+        break
+      hn_list = []
+      suggest_outputs = []
+      suggest_output_probab = []
       word = word.lower()
       char_list_new = list(word)
       word = " ".join(char_list_new)
@@ -316,20 +336,41 @@ def evaluate():
       _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
                                        target_weights, bucket_id, True)
       # This is a greedy decoder - outputs are just argmaxes of output_logits.
-      outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-      # If there is an EOS symbol in outputs, cut them at that point.
-      if data_utils.EOS_ID in outputs:
-        outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+      #outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+      if not suggest:
+        n_suggest = 1
+      for logit in output_logits:
+        sorted_indxs = np.argsort(logit[0])
+        reversed_arr = sorted_indxs[::-1]
+        if len(reversed_arr) > n_suggest:
+          suggest_outputs.append(reversed_arr[:n_suggest])
+          suggest_output_probab.append(np.take(logit[0], reversed_arr[:n_suggest]))
+        else:
+          suggest_outputs.append(reversed_arr)
+          suggest_output_probab.append(np.take(logit[0], reversed_arr))
+          n_suggest = len(reversed_arr)
 
-      # Print out Hindi word corresponding to outputs.
-      hn_output = "".join([tf.compat.as_str(rev_hn_vocab[output]) for output in outputs])
+      suggest_outputs = np.array(suggest_outputs)
+      suggest_output_probab = np.array(suggest_output_probab)
+      suggestions = np.hsplit(suggest_outputs,suggest_outputs.shape[1])
+      suggestion_probab = np.hsplit(suggest_output_probab,suggest_output_probab.shape[1])
+
+      for s_probab,suggestion in zip(suggestion_probab,suggestions):
+        suggestion = np.ravel(suggestion)
+        s_probab = np.sum(np.ravel(s_probab))
+        if data_utils.EOS_ID in suggestion:
+          suggestion = suggestion[suggestion != data_utils.EOS_ID]
+        hn_output = "".join([tf.compat.as_str(rev_hn_vocab[output]) for output in suggestion])
+        hn_output = hn_output + ';' + str(s_probab)
+        hn_list.append(hn_output)
+
       if i%100 == 0:
-        print(str(i)+' out of ' + str(len(en_eval_list)) +' words decoded\n English Input: ' + word + '\t Hindi Output: ' + hn_output)
+        print(str(i)+' out of ' + str(len(en_eval_list)) +' words decoded\n English Input: ' + word + '\t Hindi Output: ' + '\t\t'.join(hn_list))
 
-      file_content_output.append([word,hn_output])
+      file_content_output.append('\t'.join(hn_list))
 
     print('done generating the output file!!!')
-    fc_str = '\n'.join(['\t'.join(row) for row in file_content_output])
+    fc_str = '\n'.join(file_content_output)
     f = codecs.open(result_path, encoding='utf-8', mode='wb')
     f.write(fc_str.decode('utf-8'))
 
