@@ -45,7 +45,7 @@ vocabulary
             |_vocab_9_08_2016.tar
 ```
 
-***The pretrained models and vocabularies are versioned with a date attached to the name of the compressed files. Downloading the latest version is recommended. You will find both .tar and .zip files in the download link. Both of them have the same model so you can download any one. Make sure that your mode and vocabulary date and version match.***</br></br>
+***The pretrained models and vocabularies are versioned with a date attached to the name of the compressed files. Downloading the latest version is recommended. You will find both .tar and .zip files in the download link. Both of them have the same model so you can download any one. Make sure that your model and vocabulary date and version match.***</br></br>
 
 #Load and Run
 ###Loading the model
@@ -80,7 +80,7 @@ If you get a ***'done generating the output file!!!'*** message on your commandl
 ###Training
 Once you have the above files in a directory, execute the following command to start training your own model.
 ```
-python transliterate.py --data_dir <path_to_directory_with_training_and_development_files> --train_dir <path_to_a_directory_to_save_checkpoints> ----size=2<number_units_per_layer> --num_layers=<number_of_layers> --steps_per_checkpoint=<number_of_steps_to_save_a_checkpoint>
+python transliterate.py --data_dir <path_to_directory_with_training_and_development_files> --train_dir <path_to_a_directory_to_save_checkpoints> --size=2<number_units_per_layer> --num_layers=<number_of_layers> --steps_per_checkpoint=<number_of_steps_to_save_a_checkpoint>
 ```
 The following is a real example of the above,
 ```
