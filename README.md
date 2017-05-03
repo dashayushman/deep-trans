@@ -45,7 +45,8 @@ vocabulary
             |_vocab_9_08_2016.tar
 ```
 
-***The pretrained models and vocabularies are versioned with a date attached to the name of the compressed files. Downloading the latest version is recommended. You will find both .tar and .zip files in the download link. Both of them have the same model so you can download any one. Make sure that your model and vocabulary date and version match.***</br></br>
+***The pretrained models and vocabularies are versioned with a date attached to the name of the compressed files. Downloading the latest version is recommended. You will find both .tar and .zip files in the download link. Both of them have the same model so you can download any one. Make sure that your model and vocabulary date and version match.***
+</br></br>
 
 # Load and Run
 ### Loading the model
